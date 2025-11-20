@@ -1,17 +1,15 @@
-// 파일명: update.js
 const fs = require('fs');
 
 async function main() {
     try {
         const TICKER = "TQQQ";
-        // 1. 데이터 조회 (300일치)
+        // 1. 데이터 조회
         const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${TICKER}?range=300d&interval=1d`);
         const data = await res.json();
         const result = data.chart.result[0];
         
         const closes = result.indicators.quote[0].close;
-        // 장중이라면 현재가로 마지막 데이터 덮어쓰기
-        closes[closes.length - 1] = result.meta.regularMarketPrice;
+        closes[closes.length - 1] = result.meta.regularMarketPrice; // 현재가 업데이트
 
         // 2. MA200 계산
         const ma200 = [];
@@ -28,23 +26,39 @@ async function main() {
         const prevMA200 = ma200[ma200.length - 2];
         const envelope = currentMA200 * 1.05; // 5% 엔벨로프
 
-        // 3. 상황 판단 로직
-        let status = "보합/관망";
-        let action = "HOLD";
-        let color = "#FFFFFF";
+        // 3. 상황 판단 로직 (원본 Scriptable 코드와 문구 일치시킴)
+        let status = "";
+        let action = "";
+        let color = "";
 
+        // 로직 순서도 원본과 동일하게 맞춤
         if (currentPrice > currentMA200 && prevPrice <= prevMA200) {
-            status = "골든크로스 (상승신호)"; action = "진입 대기"; color = "#fd8a69";
-        } else if (currentPrice > envelope) {
-            status = "과열 구간"; action = "분할 매도 / SPYM"; color = "#b96bc6";
-        } else if (currentPrice > currentMA200) {
-            status = "상승 추세"; action = "TQQQ 매수/보유"; color = "#fd8a69";
-        } else {
-            status = "하락 추세"; action = "현금 확보 / SGOV"; color = "#58ccff";
+            status = "상승 신호!"; 
+            action = "내일 종가 확인 후 진입"; 
+            color = "#fd8a69"; // Buy Color
+        } 
+        else if (currentPrice > envelope) {
+            status = "과열 상황"; 
+            action = "TQQQ 유지 / SPYM 추가매수"; 
+            color = "#b96bc6"; // Maintain Color
+        } 
+        else if (currentPrice > currentMA200) {
+            status = "집중 투자 상황"; 
+            action = "SGOV 매도 / TQQQ 매수"; 
+            color = "#fd8a69"; // Buy Color
+        } 
+        else {
+            status = "하락 상황"; 
+            action = "SPYM TQQQ 매도 / SGOV 매수"; 
+            color = "#58ccff"; // Sell Color
         }
 
-        // 4. 차트 URL 생성 (QuickChart API)
-        // 쿼리 길이 최적화를 위해 최근 90일치만 사용 + 소수점 2자리 절삭
+        // 편차(Deviation) 계산 추가
+        const deviation = ((currentPrice / currentMA200) - 1) * 100;
+        const deviationText = `(${deviation >= 0 ? '+' : ''}${deviation.toFixed(2)}%)`;
+        const finalStatus = `${status} ${deviationText}`;
+
+        // 4. 차트 URL 생성
         const sliceCnt = 90;
         const chartData = {
             type: 'line',
@@ -64,7 +78,7 @@ async function main() {
         const output = {
             price: currentPrice.toFixed(2),
             ma200: currentMA200.toFixed(2),
-            status: status,
+            status: finalStatus, // 편차 포함된 상태 메시지
             action: action,
             color: color,
             chartUrl: chartUrl,
