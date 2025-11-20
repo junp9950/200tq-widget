@@ -1,0 +1,32 @@
+name: Update Widget Data
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 매시간 정각 (UTC 기준)
+  workflow_dispatch: # 수동 실행 버튼 활성화
+
+permissions:
+  contents: write # **중요: 봇이 리포지토리에 쓸 수 있게 권한 부여**
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Run Script
+        run: node update.js
+        
+      - name: Commit & Push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add result.json
+          # 변동사항 없으면 에러 없이 종료
+          git commit -m "Update TQQQ Data" || exit 0
+          git push
