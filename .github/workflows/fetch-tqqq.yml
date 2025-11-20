@@ -24,9 +24,11 @@ jobs:
         run: mkdir -p data
 
       - name: Fetch TQQQ chart JSON
-        # Yahoo Finance API를 사용해 300일치 데이터를 JSON 파일로 저장
         run: |
-          curl -s "https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?range=300d&interval=1d" \
+          # --user-agent 옵션을 추가하여 브라우저처럼 보이게 만듭니다.
+          curl -s \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+            "https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?range=300d&interval=1d" \
             -o data/tqqq-raw.json
 
       - name: Commit and push if changed
