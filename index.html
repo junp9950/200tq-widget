@@ -4,24 +4,40 @@
   <meta charset="UTF-8" />
   <title>티큐 200일선 매매법 - Web 위젯</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
+    /* 1. 전체 위젯 스타일 */
     body {
       background: #000;
       color: #fff;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      padding: 16px;
+      padding: 12px; /* 패딩을 줄여 위젯처럼 보이게 함 */
+      max-width: 400px; /* 모바일/위젯 크기 제한 */
+      margin: 0 auto;
+      line-height: 1.4;
     }
-    .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-    .sub { font-size: 12px; color: #aaa; margin-bottom: 12px; }
-    .stat-line { font-size: 14px; margin: 4px 0; }
-    .situation { font-size: 16px; margin-top: 12px; }
-    .principle-line { font-size: 18px; font-weight: 700; }
-    .maintain { color: #b96bc6; }
-    .buy { color: #fd8a69; }
-    .sell { color: #58ccff; }
-    .price { color: #58ccff; }
-    .env { color: #b96bc6; }
-    .ma { color: #AFD485; }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .sub { font-size: 11px; color: #888; margin-bottom: 10px; }
+
+    /* 2. 행동 원칙 영역 스타일 */
+    #principles { margin: 10px 0 10px 0; }
+    .principle-line { font-size: 16px; font-weight: 700; }
+    
+    /* 3. 상황/지표 라인 스타일 */
+    .situation { font-size: 14px; margin-bottom: 8px; color: #ddd; }
+    .stat-line { font-size: 12px; margin-bottom: 12px; }
+
+    /* 4. 색상 정의 */
+    .maintain { color: #b96bc6; } /* 유지 (보라) */
+    .buy { color: #fd8a69; } /* 매수 (주황) */
+    .sell { color: #58ccff; } /* 매도 (파랑) */
+    
+    .price { font-weight: 700; color: #58ccff; } /* 현재가 */
+    .env { color: #b96bc6; } /* Envelope */
+    .ma { color: #AFD485; } /* 200일선 */
+
+    /* 5. 차트 캔버스 스타일 */
+    #priceChart { max-height: 200px; } /* 차트 높이 제한 */
   </style>
 </head>
 <body>
@@ -34,11 +50,16 @@
 
   <div class="stat-line" id="stats"></div>
 
+  <canvas id="priceChart"></canvas>
+
   <script>
     const ENVELOPE_PERCENTAGE = 5;
+    const CHART_DAYS = 90; // 차트에 표시할 일수 (90일만 표시)
+
+    // Chart.js 인스턴스를 저장할 변수
+    let priceChart;
 
     async function loadData() {
-      // data/tqqq-raw.json을 읽어옴. URL에 타임스탬프를 붙여 캐싱 방지
       const res = await fetch('data/tqqq-raw.json?' + Date.now());
       if (!res.ok) {
         document.getElementById('meta-info').textContent = '데이터 로딩 실패';
@@ -49,7 +70,6 @@
       const timestamps = result.timestamp;
       let closes = result.indicators.quote[0].close.map(p => p === null ? 0 : p);
       const currentPrice = result.meta.regularMarketPrice;
-      // 가장 마지막 종가(null일 수 있음)를 현재가로 업데이트
       if (closes.length > 0) closes[closes.length - 1] = currentPrice;
 
       // 200일선 계산
@@ -59,16 +79,15 @@
         return;
       }
 
-      // 마지막 200일의 종가 합계
+      // --- 지표 계산 로직 시작 ---
       let sum = 0;
       for (let i = len - 200; i < len; i++) sum += closes[i];
       const ma200 = sum / 200;
       const envelope = ma200 * (1 + ENVELOPE_PERCENTAGE / 100);
 
-      const curr = closes[len - 1]; // 현재 종가
-      const yest = closes[len - 2]; // 전일 종가
+      const curr = closes[len - 1];
+      const yest = closes[len - 2];
 
-      // 상황 판별 로직
       let situationName = '하락 상황';
       let principle = 'SPYM TQQQ 매도\nSGOV 매수';
 
@@ -86,8 +105,11 @@
       }
 
       const deviation = ((curr / ma200) - 1) * 100;
+      // --- 지표 계산 로직 끝 ---
 
-      // 날짜 포맷 (NY 종가 기준 시간대 반영)
+      // --- UI 출력 로직 시작 ---
+      
+      // 날짜 포맷 (NY 종가 기준)
       const lastTs = timestamps[timestamps.length - 1] * 1000;
       const nyDate = new Date(lastTs);
       const formatter = new Intl.DateTimeFormat('ko-KR', {
@@ -135,11 +157,94 @@
         `<span class="price">$${curr.toFixed(2)}</span> / ` +
         `<span class="env">$${envelopeNow.toFixed(2)}</span> / ` +
         `<span class="ma">$${ma200.toFixed(2)}</span>`;
+
+      // --- 차트 그리기 로직 시작 ---
+
+      // 차트에 표시할 기간의 데이터만 자르기
+      const startIndex = Math.max(0, len - CHART_DAYS);
+      const chartCloses = closes.slice(startIndex);
+      const chartTimestamps = timestamps.slice(startIndex);
+
+      // MA200과 Envelope 선은 전체 데이터에서 계산된 값을 차트 기간 내내 유지
+      const ma200Data = new Array(chartCloses.length).fill(ma200);
+      const envelopeData = new Array(chartCloses.length).fill(envelope);
+      
+      // 날짜 레이블 포맷
+      const labels = chartTimestamps.map(ts => {
+        const date = new Date(ts * 1000);
+        return `${date.getMonth() + 1}/${date.getDate()}`; // 월/일 형식
+      });
+
+      const ctx = document.getElementById('priceChart').getContext('2d');
+      
+      // 기존 차트 인스턴스가 있으면 파괴하고 새로 만듭니다.
+      if (priceChart) {
+          priceChart.destroy();
+      }
+
+      priceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '종가',
+              data: chartCloses,
+              borderColor: '#58ccff', // 현재가 색상 (파랑)
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.2, // 곡선 부드럽게
+            },
+            {
+              label: 'Envelope',
+              data: envelopeData,
+              borderColor: '#b96bc6', // Envelope 색상 (보라)
+              borderWidth: 1.5,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              tension: 0,
+            },
+            {
+              label: 'MA 200',
+              data: ma200Data,
+              borderColor: '#AFD485', // 200일선 색상 (녹색)
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              display: false, // X축(날짜) 라벨 숨기기
+              grid: { display: false }
+            },
+            y: {
+              display: false, // Y축(가격) 라벨 숨기기
+              grid: { display: false },
+              // 차트 범위 조절 (MA200을 중심으로 +/- 15% 정도)
+              min: ma200 * 0.85, 
+              max: ma200 * 1.15
+            }
+          },
+          plugins: {
+            legend: { display: false }, // 범례 숨기기
+            tooltip: { enabled: false } // 툴팁 숨기기
+          },
+          layout: {
+              padding: { top: 5, bottom: 5, left: 5, right: 5 }
+          }
+        }
+      });
     }
 
     loadData().catch(err => {
       console.error(err);
-      document.getElementById('meta-info').textContent = '오류 발생';
+      // '오류 발생' 메시지 대신 '데이터 로딩 실패' 메시지를 출력합니다.
+      document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
     });
   </script>
 </body>
