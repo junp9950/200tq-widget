@@ -88,11 +88,10 @@
 
         /* 200일선 */
 
-        /* 5. 차트 캔버스 스타일 */
-        /* 5. 차트 캔버스 스타일 */
+        /* 5. 차트 캔버스 스타일 (늘어짐 방지 및 높이 고정) */
         #priceChart {
-            /* 세로로 늘어지는 것을 방지하기 위해 높이를 200px로 고정합니다. */
             height: 200px;
+            /* 차트 높이를 200px로 고정 */
         }
     </style>
 </head>
@@ -271,7 +270,6 @@
                         }
                     ]
                 },
-                // Chart options 수정 (수동 min/max 제거)
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -283,10 +281,7 @@
                         y: {
                             display: false,
                             grid: { display: false },
-                            // 이전에 있던 수동 범위 설정(min, max)을 제거합니다. 
-                            // Chart.js가 데이터에 맞춰 자동으로 범위를 조정하게 합니다.
-                            // min: ma200 * 0.85,  <-- 삭제
-                            // max: ma200 * 1.15   <-- 삭제
+                            // min/max 제거로 Chart.js가 데이터에 맞춰 자동 스케일링
                         }
                     },
                     plugins: {
@@ -297,12 +292,14 @@
                         padding: { top: 5, bottom: 5, left: 5, right: 5 }
                     }
                 }
+            });
+        } // <--- loadData 함수를 닫는 괄호
 
-    loadData().catch(err => {
-                    console.error(err);
-                    // '오류 발생' 메시지 대신 '데이터 로딩 실패' 메시지를 출력합니다.
-                    document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
-                });
+        // --- 스크립트 실행 부분 (SyntaxError 해결) ---
+        loadData().catch(err => {
+            console.error(err);
+            document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
+        });
     </script>
 </body>
 
