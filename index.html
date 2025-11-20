@@ -270,20 +270,15 @@
                         }
                     ]
                 },
+                // Chart options 내부
                 options: {
-                    responsive: true,
+                    // responsive를 false로 설정하여 차트가 캔버스 크기에만 의존하게 강제
+                    responsive: false,
                     maintainAspectRatio: false,
                     scales: {
-                        x: {
-                            display: false,
-                            grid: { display: false }
-                        },
-                        y: {
-                            display: false,
-                            grid: { display: false },
-                            // min/max 제거로 Chart.js가 데이터에 맞춰 자동 스케일링
-                        }
+                        // ... (scales 부분은 그대로 유지) ...
                     },
+                    // ... (plugins, layout 부분은 그대로 유지) ...
                     plugins: {
                         legend: { display: false },
                         tooltip: { enabled: false }
