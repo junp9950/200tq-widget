@@ -35,7 +35,7 @@ async function main() {
         const currentMA200 = ma200[ma200.length - 1];
         const prevPrice = closes[closes.length - 2];
         const prevMA200 = ma200[ma200.length - 2];
-        const envelope = currentMA200 * 1.05;
+        const envelope = currentMA200 * 1.1;
 
         // 3. 상황 판단 및 BBCode 색상 입히기
         let statusRaw = ""; 
