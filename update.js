@@ -14,6 +14,7 @@ async function main() {
         const data = await res.json();
         const result = data.chart.result[0];
         
+        const timestamps = result.timestamp; // [추가] 날짜 데이터 가져오기
         const closes = result.indicators.quote[0].close;
         closes[closes.length - 1] = result.meta.regularMarketPrice;
 
@@ -35,10 +36,10 @@ async function main() {
         // 3. 색상 팔레트
         const COLORS = { 
             white: "#FFFFFF",    
-            rising: "#76E383",   // 상승=연초록
-            focused: "#FFAB40",  // 집중=오렌지
-            overheat: "#b96bc6", // 과열=보라
-            falling: "#58ccff",  // 하락=파랑
+            rising: "#76E383",   
+            focused: "#FFAB40",  
+            overheat: "#b96bc6", 
+            falling: "#58ccff",  
             ma200: "#AFD485",    
             gray: "#aaaaaa"      
         };
@@ -50,7 +51,6 @@ async function main() {
         const deviation = ((currentPrice / currentMA200) - 1) * 100;
         const deviationText = `(${deviation >= 0 ? '+' : ''}${deviation.toFixed(2)}%)`;
 
-        // [로직] 상황별 멘트 색상 + 줄바꿈(\n)
         if (currentPrice > currentMA200 && prevPrice <= prevMA200) {
             statusRich = `[c=${COLORS.rising}]상승 신호![/c] [c=${COLORS.gray}]${deviationText}[/c]`;
             actionRich = `내일 종가 확인 후 [c=${COLORS.focused}]진입[/c]`;
@@ -77,10 +77,17 @@ async function main() {
 
         // 7. 차트 생성
         const sliceCnt = 90;
+        
+        // [추가] X축 라벨 생성 (Timestamp -> "MM/DD" 포맷 변환)
+        const chartLabels = timestamps.slice(-sliceCnt).map(ts => {
+            const d = new Date(ts * 1000);
+            return `${d.getMonth() + 1}/${d.getDate()}`;
+        });
+
         const chartData = {
             type: 'line',
             data: {
-                labels: new Array(sliceCnt).fill(''),
+                labels: chartLabels, // [수정] 실제 날짜 데이터 주입
                 datasets: [
                     { data: closes.slice(-sliceCnt).map(v=>Number(v.toFixed(2))), borderColor: COLORS.falling, borderWidth: 2, pointRadius: 0, fill: false },
                     { data: ma200.slice(-sliceCnt).map(v=>Number(v.toFixed(2))), borderColor: COLORS.ma200, borderWidth: 2, pointRadius: 0, fill: false },
@@ -89,23 +96,28 @@ async function main() {
             },
             options: { 
                 legend: { display: false }, 
-                // [디자인 수정] Y축(가격) 눈금 표시
                 scales: { 
                     yAxes: [{ 
-                        display: true,             // Y축 보이기
-                        position: 'right',         // 오른쪽에 배치 (트레이딩 뷰 스타일)
-                        ticks: { 
-                            fontColor: '#888888',  // 눈금 색상 (회색)
-                            fontSize: 10           // 글자 크기
-                        },
-                        gridLines: {
-                            display: false,        // 격자무늬는 끔 (지저분함 방지)
-                            drawBorder: false      // 테두리 선 제거
-                        }
+                        display: true,
+                        position: 'right',
+                        ticks: { fontColor: '#cccccc', fontSize: 10, padding: 5 },
+                        gridLines: { display: false, drawBorder: false }
                     }], 
-                    xAxes: [{ display: false }]    // X축(날짜)은 너무 많아서 숨김
+                    // [수정] X축(날짜) 활성화 및 설정
+                    xAxes: [{ 
+                        display: true, 
+                        ticks: { 
+                            fontColor: '#cccccc', 
+                            fontSize: 10,
+                            maxTicksLimit: 4, // [중요] 최대 4개까지만 표시 (겹침 방지)
+                            maxRotation: 0    // 글자 회전 방지
+                        },
+                        gridLines: { display: false, drawBorder: false }
+                    }] 
                 },
-                layout: { padding: { top: 10, bottom: 10, left: 0, right: 5 } }
+                layout: { 
+                    padding: { top: 10, bottom: 10, left: 10, right: 30 } 
+                }
             }
         };
         const chartUrl = `https://quickchart.io/chart?w=600&h=350&bkg=black&c=${encodeURIComponent(JSON.stringify(chartData))}`;
@@ -122,7 +134,7 @@ async function main() {
         };
         
         fs.writeFileSync('result.json', JSON.stringify(output));
-        console.log("Updated: Chart with Y-Axis Scales");
+        console.log("Updated: X-Axis Date Labels Added");
 
     } catch (e) {
         console.error(e);
