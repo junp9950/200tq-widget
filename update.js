@@ -31,45 +31,56 @@ async function main() {
         const prevPrice = closes[closes.length - 2];
         const prevMA200 = ma200[ma200.length - 2];
         
-        // [설정값 적용] 상수를 사용하여 계산
+        // [설정값 적용]
         const envelope = currentMA200 * ENV_PERCENT;
 
         // 3. 상황 판단 로직
         let status = "";
         let action = "";
-        let color = "";
+        let color = ""; // 이 변수가 상황별 대표 색상이 됩니다.
+
+        // 색상 정의 (파스텔톤)
+        const COLORS = { 
+            up: "#fd8a69",    // 상승 (연빨강)
+            down: "#58ccff",  // 하락 (하늘색)
+            warn: "#b96bc6",  // 과열 (보라색)
+            gray: "#aaaaaa",  // 보조 (회색)
+            ma200: "#AFD485"  // 200일선 (연두색)
+        };
 
         if (currentPrice > currentMA200 && prevPrice <= prevMA200) {
             status = "상승 신호!"; 
             action = "내일 종가 확인 후 진입"; 
-            color = "#fd8a69"; 
+            color = COLORS.up; // 빨강
         } 
         else if (currentPrice > envelope) {
             status = "과열 상황"; 
             action = "TQQQ 유지 / SPYM 추가매수"; 
-            color = "#b96bc6"; 
+            color = COLORS.warn; // 보라
         } 
         else if (currentPrice > currentMA200) {
             status = "집중 투자 상황"; 
             action = "SGOV 매도 / TQQQ 매수"; 
-            color = "#fd8a69"; 
+            color = COLORS.up; // 빨강
         } 
         else {
             status = "하락 상황"; 
             action = "SPYM TQQQ 매도 / SGOV 매수"; 
-            color = "#58ccff"; 
+            color = COLORS.down; // 파랑
         }
 
         const deviation = ((currentPrice / currentMA200) - 1) * 100;
         const deviationText = `(${deviation >= 0 ? '+' : ''}${deviation.toFixed(2)}%)`;
 
-        // 색상 정의
-        const COLORS = { price: "#58ccff", env: "#b96bc6", ma200: "#AFD485", gray: "#aaaaaa" };
-
-        // BBCode 텍스트 생성
+        // ============================================================
+        // [핵심 수정] status 멘트 자체에 색상(color)을 입힘
+        // ============================================================
+        const statusRich = `[c=${color}]${status}[/c] [c=${COLORS.gray}]${deviationText}[/c]`;
         const actionRich = `[c=${color}]${action}[/c]`;
-        const pricesRich = `[c=${COLORS.price}]$${currentPrice.toFixed(2)}[/c] / [c=${COLORS.env}]$${envelope.toFixed(2)}[/c] / [c=${COLORS.ma200}]$${currentMA200.toFixed(2)}[/c]`;
-        const statusRich = `${status} [c=${COLORS.gray}]${deviationText}[/c]`;
+        
+        // 가격표 색상 (여기는 고정색 사용)
+        const pricesRich = `[c=${COLORS.down}]$${currentPrice.toFixed(2)}[/c] / [c=${COLORS.warn}]$${envelope.toFixed(2)}[/c] / [c=${COLORS.ma200}]$${currentMA200.toFixed(2)}[/c]`;
+
 
         // 날짜
         const today = new Date();
@@ -82,20 +93,14 @@ async function main() {
             data: {
                 labels: new Array(sliceCnt).fill(''),
                 datasets: [
-                    { data: closes.slice(-sliceCnt).map(v=>Number(v.toFixed(2))), borderColor: COLORS.price, borderWidth: 2, pointRadius: 0, fill: false },
+                    { data: closes.slice(-sliceCnt).map(v=>Number(v.toFixed(2))), borderColor: COLORS.down, borderWidth: 2, pointRadius: 0, fill: false }, // 현재가는 파랑(Cyan) 계열로 통일
                     { data: ma200.slice(-sliceCnt).map(v=>Number(v.toFixed(2))), borderColor: COLORS.ma200, borderWidth: 2, pointRadius: 0, fill: false },
-                    
-                    // [설정값 적용] 차트 그릴 때도 상수 사용
-                    { data: ma200.slice(-sliceCnt).map(v=>Number((v * ENV_PERCENT).toFixed(2))), borderColor: COLORS.env, borderWidth: 1, pointRadius: 0, fill: false, borderDash: [5,5] }
+                    { data: ma200.slice(-sliceCnt).map(v=>Number((v * ENV_PERCENT).toFixed(2))), borderColor: COLORS.warn, borderWidth: 1, pointRadius: 0, fill: false, borderDash: [5,5] }
                 ]
             },
             options: { 
                 legend: { display: false }, 
-                // [디자인 개선] 차트 눈금/숫자 숨기기
-                scales: { 
-                    yAxes: [{ display: false }], 
-                    xAxes: [{ display: false }] 
-                },
+                scales: { yAxes: [{ display: false }], xAxes: [{ display: false }] },
                 layout: { padding: 10 }
             }
         };
@@ -103,7 +108,7 @@ async function main() {
 
         // 5. 결과 저장
         const output = {
-            title: "TQQQ SMA 200days", // 지웅님이 원하신 제목 적용됨
+            title: "TQQQ SMA 200days",
             date: dateStr,
             status: statusRich,
             action: actionRich,
@@ -113,7 +118,7 @@ async function main() {
         };
         
         fs.writeFileSync('result.json', JSON.stringify(output));
-        console.log("Updated with ENV_PERCENT: " + ENV_PERCENT);
+        console.log("Updated with Color logic.");
 
     } catch (e) {
         console.error(e);
