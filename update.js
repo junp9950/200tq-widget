@@ -86,7 +86,7 @@ async function main() {
 
         // 6. 결과 저장
         const output = {
-            title: "티큐 200일선 매매법",
+            title: "TQQQ SMA 200days",
             date: dateStr,
             status: statusRich,   // BBCode 포함
             action: actionRich,   // BBCode 포함
