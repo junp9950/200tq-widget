@@ -1,253 +1,309 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>티큐 200일선 매매법 - Web 위젯</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <style>
-    /* 1. 전체 위젯 스타일 */
-    body {
-      background: #000;
-      color: #fff;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      padding: 12px; /* 패딩을 줄여 위젯처럼 보이게 함 */
-      max-width: 400px; /* 모바일/위젯 크기 제한 */
-      margin: 0 auto;
-      line-height: 1.4;
-    }
-    .title { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
-    .sub { font-size: 11px; color: #888; margin-bottom: 10px; }
-
-    /* 2. 행동 원칙 영역 스타일 */
-    #principles { margin: 10px 0 10px 0; }
-    .principle-line { font-size: 16px; font-weight: 700; }
-    
-    /* 3. 상황/지표 라인 스타일 */
-    .situation { font-size: 14px; margin-bottom: 8px; color: #ddd; }
-    .stat-line { font-size: 12px; margin-bottom: 12px; }
-
-    /* 4. 색상 정의 */
-    .maintain { color: #b96bc6; } /* 유지 (보라) */
-    .buy { color: #fd8a69; } /* 매수 (주황) */
-    .sell { color: #58ccff; } /* 매도 (파랑) */
-    
-    .price { font-weight: 700; color: #58ccff; } /* 현재가 */
-    .env { color: #b96bc6; } /* Envelope */
-    .ma { color: #AFD485; } /* 200일선 */
-
-/* 5. 차트 캔버스 스타일 */
-    #priceChart { 
-        /* max-height 설정을 제거하고 빈 블록으로 둡니다. */
-    }
-  </style>
-</head>
-<body>
-  <div class="title">티큐 200일선 매매법</div>
-  <div class="sub" id="meta-info">로딩 중...</div>
-
-  <div id="principles"></div>
-
-  <div class="situation" id="situation"></div>
-
-  <div class="stat-line" id="stats"></div>
-
-  <canvas id="priceChart"></canvas>
-
-  <script>
-    const ENVELOPE_PERCENTAGE = 5;
-    const CHART_DAYS = 90; // 차트에 표시할 일수 (90일만 표시)
-
-    // Chart.js 인스턴스를 저장할 변수
-    let priceChart;
-
-    async function loadData() {
-      const res = await fetch('data/tqqq-raw.json?' + Date.now());
-      if (!res.ok) {
-        document.getElementById('meta-info').textContent = '데이터 로딩 실패';
-        return;
-      }
-      const json = await res.json();
-      const result = json.chart.result[0];
-      const timestamps = result.timestamp;
-      let closes = result.indicators.quote[0].close.map(p => p === null ? 0 : p);
-      const currentPrice = result.meta.regularMarketPrice;
-      if (closes.length > 0) closes[closes.length - 1] = currentPrice;
-
-      // 200일선 계산
-      const len = closes.length;
-      if (len < 200) {
-        document.getElementById('meta-info').textContent = '데이터 부족: 200일 미만';
-        return;
-      }
-
-      // --- 지표 계산 로직 시작 ---
-      let sum = 0;
-      for (let i = len - 200; i < len; i++) sum += closes[i];
-      const ma200 = sum / 200;
-      const envelope = ma200 * (1 + ENVELOPE_PERCENTAGE / 100);
-
-      const curr = closes[len - 1];
-      const yest = closes[len - 2];
-
-      let situationName = '하락 상황';
-      let principle = 'SPYM TQQQ 매도\nSGOV 매수';
-
-      const envelopeNow = envelope;
-
-      if (curr > ma200 && yest <= ma200) {
-        situationName = '상승 신호!';
-        principle = '내일 종가 확인\n이후 진입';
-      } else if (curr > envelopeNow) {
-        situationName = '과열 상황';
-        principle = 'TQQQ 유지\nSPYM 추가매수';
-      } else if (curr > ma200) {
-        situationName = '집중 투자 상황';
-        principle = 'SGOV 매도\nTQQQ 매수';
-      }
-
-      const deviation = ((curr / ma200) - 1) * 100;
-      // --- 지표 계산 로직 끝 ---
-
-      // --- UI 출력 로직 시작 ---
-      
-      // 날짜 포맷 (NY 종가 기준)
-      const lastTs = timestamps[timestamps.length - 1] * 1000;
-      const nyDate = new Date(lastTs);
-      const formatter = new Intl.DateTimeFormat('ko-KR', {
-        year: '2-digit',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'America/New_York'
-      });
-      document.getElementById('meta-info').textContent =
-        formatter.format(nyDate) + ' 종가 기준';
-
-      // 행동 원칙 출력
-      const principlesDiv = document.getElementById('principles');
-      principlesDiv.innerHTML = '';
-      const lines = principle.split('\n');
-
-      function colorizeWord(word) {
-        if (word.includes('유지')) return 'maintain';
-        if (word.includes('매수') || word.includes('추가매수')) return 'buy';
-        if (word.includes('매도')) return 'sell';
-        return '';
-      }
-
-      lines.forEach(line => {
-        const div = document.createElement('div');
-        div.className = 'principle-line';
-        line.split(' ').forEach((word, idx, arr) => {
-          const span = document.createElement('span');
-          const cls = colorizeWord(word);
-          if (cls) span.classList.add(cls);
-          span.textContent = word;
-          div.appendChild(span);
-          if (idx < arr.length - 1) div.appendChild(document.createTextNode(' '));
-        });
-        principlesDiv.appendChild(div);
-      });
-
-      // 상황 + 괴리율
-      const situationText =
-        `${situationName} (${deviation >= 0 ? '+' : ''}${deviation.toFixed(2)}%)`;
-      document.getElementById('situation').textContent = situationText;
-
-      // 핵심 지표 라인
-      document.getElementById('stats').innerHTML =
-        `<span class="price">$${curr.toFixed(2)}</span> / ` +
-        `<span class="env">$${envelopeNow.toFixed(2)}</span> / ` +
-        `<span class="ma">$${ma200.toFixed(2)}</span>`;
-
-      // --- 차트 그리기 로직 시작 ---
-
-      // 차트에 표시할 기간의 데이터만 자르기
-      const startIndex = Math.max(0, len - CHART_DAYS);
-      const chartCloses = closes.slice(startIndex);
-      const chartTimestamps = timestamps.slice(startIndex);
-
-      // MA200과 Envelope 선은 전체 데이터에서 계산된 값을 차트 기간 내내 유지
-      const ma200Data = new Array(chartCloses.length).fill(ma200);
-      const envelopeData = new Array(chartCloses.length).fill(envelope);
-      
-      // 날짜 레이블 포맷
-      const labels = chartTimestamps.map(ts => {
-        const date = new Date(ts * 1000);
-        return `${date.getMonth() + 1}/${date.getDate()}`; // 월/일 형식
-      });
-
-      const ctx = document.getElementById('priceChart').getContext('2d');
-      
-      // 기존 차트 인스턴스가 있으면 파괴하고 새로 만듭니다.
-      if (priceChart) {
-          priceChart.destroy();
-      }
-
-      priceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: '종가',
-              data: chartCloses,
-              borderColor: '#58ccff', // 현재가 색상 (파랑)
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0.2, // 곡선 부드럽게
-            },
-            {
-              label: 'Envelope',
-              data: envelopeData,
-              borderColor: '#b96bc6', // Envelope 색상 (보라)
-              borderWidth: 1.5,
-              borderDash: [5, 5],
-              pointRadius: 0,
-              tension: 0,
-            },
-            {
-              label: 'MA 200',
-              data: ma200Data,
-              borderColor: '#AFD485', // 200일선 색상 (녹색)
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0,
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              display: false, // X축(날짜) 라벨 숨기기
-              grid: { display: false }
-            },
-            y: {
-              display: false, // Y축(가격) 라벨 숨기기
-              grid: { display: false },
-              // 차트 범위 조절 (MA200을 중심으로 +/- 15% 정도)
-              min: ma200 * 0.85, 
-              max: ma200 * 1.15
-            }
-          },
-          plugins: {
-            legend: { display: false }, // 범례 숨기기
-            tooltip: { enabled: false } // 툴팁 숨기기
-          },
-          layout: {
-              padding: { top: 5, bottom: 5, left: 5, right: 5 }
-          }
+    <meta charset="UTF-8" />
+    <title>티큐 200일선 매매법 - Web 위젯</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        /* 1. 전체 위젯 스타일 */
+        body {
+            background: #000;
+            color: #fff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            padding: 12px;
+            /* 패딩을 줄여 위젯처럼 보이게 함 */
+            max-width: 400px;
+            /* 모바일/위젯 크기 제한 */
+            margin: 0 auto;
+            line-height: 1.4;
         }
-      });
-    }
+
+        .title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .sub {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        /* 2. 행동 원칙 영역 스타일 */
+        #principles {
+            margin: 10px 0 10px 0;
+        }
+
+        .principle-line {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        /* 3. 상황/지표 라인 스타일 */
+        .situation {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #ddd;
+        }
+
+        .stat-line {
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        /* 4. 색상 정의 */
+        .maintain {
+            color: #b96bc6;
+        }
+
+        /* 유지 (보라) */
+        .buy {
+            color: #fd8a69;
+        }
+
+        /* 매수 (주황) */
+        .sell {
+            color: #58ccff;
+        }
+
+        /* 매도 (파랑) */
+
+        .price {
+            font-weight: 700;
+            color: #58ccff;
+        }
+
+        /* 현재가 */
+        .env {
+            color: #b96bc6;
+        }
+
+        /* Envelope */
+        .ma {
+            color: #AFD485;
+        }
+
+        /* 200일선 */
+
+        /* 5. 차트 캔버스 스타일 */
+        /* 5. 차트 캔버스 스타일 */
+        #priceChart {
+            /* 세로로 늘어지는 것을 방지하기 위해 높이를 200px로 고정합니다. */
+            height: 200px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="title">티큐 200일선 매매법</div>
+    <div class="sub" id="meta-info">로딩 중...</div>
+
+    <div id="principles"></div>
+
+    <div class="situation" id="situation"></div>
+
+    <div class="stat-line" id="stats"></div>
+
+    <canvas id="priceChart"></canvas>
+
+    <script>
+        const ENVELOPE_PERCENTAGE = 5;
+        const CHART_DAYS = 90; // 차트에 표시할 일수 (90일만 표시)
+
+        // Chart.js 인스턴스를 저장할 변수
+        let priceChart;
+
+        async function loadData() {
+            const res = await fetch('data/tqqq-raw.json?' + Date.now());
+            if (!res.ok) {
+                document.getElementById('meta-info').textContent = '데이터 로딩 실패';
+                return;
+            }
+            const json = await res.json();
+            const result = json.chart.result[0];
+            const timestamps = result.timestamp;
+            let closes = result.indicators.quote[0].close.map(p => p === null ? 0 : p);
+            const currentPrice = result.meta.regularMarketPrice;
+            if (closes.length > 0) closes[closes.length - 1] = currentPrice;
+
+            // 200일선 계산
+            const len = closes.length;
+            if (len < 200) {
+                document.getElementById('meta-info').textContent = '데이터 부족: 200일 미만';
+                return;
+            }
+
+            // --- 지표 계산 로직 시작 ---
+            let sum = 0;
+            for (let i = len - 200; i < len; i++) sum += closes[i];
+            const ma200 = sum / 200;
+            const envelope = ma200 * (1 + ENVELOPE_PERCENTAGE / 100);
+
+            const curr = closes[len - 1];
+            const yest = closes[len - 2];
+
+            let situationName = '하락 상황';
+            let principle = 'SPYM TQQQ 매도\nSGOV 매수';
+
+            const envelopeNow = envelope;
+
+            if (curr > ma200 && yest <= ma200) {
+                situationName = '상승 신호!';
+                principle = '내일 종가 확인\n이후 진입';
+            } else if (curr > envelopeNow) {
+                situationName = '과열 상황';
+                principle = 'TQQQ 유지\nSPYM 추가매수';
+            } else if (curr > ma200) {
+                situationName = '집중 투자 상황';
+                principle = 'SGOV 매도\nTQQQ 매수';
+            }
+
+            const deviation = ((curr / ma200) - 1) * 100;
+            // --- 지표 계산 로직 끝 ---
+
+            // --- UI 출력 로직 시작 ---
+
+            // 날짜 포맷 (NY 종가 기준)
+            const lastTs = timestamps[timestamps.length - 1] * 1000;
+            const nyDate = new Date(lastTs);
+            const formatter = new Intl.DateTimeFormat('ko-KR', {
+                year: '2-digit',
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: 'America/New_York'
+            });
+            document.getElementById('meta-info').textContent =
+                formatter.format(nyDate) + ' 종가 기준';
+
+            // 행동 원칙 출력
+            const principlesDiv = document.getElementById('principles');
+            principlesDiv.innerHTML = '';
+            const lines = principle.split('\n');
+
+            function colorizeWord(word) {
+                if (word.includes('유지')) return 'maintain';
+                if (word.includes('매수') || word.includes('추가매수')) return 'buy';
+                if (word.includes('매도')) return 'sell';
+                return '';
+            }
+
+            lines.forEach(line => {
+                const div = document.createElement('div');
+                div.className = 'principle-line';
+                line.split(' ').forEach((word, idx, arr) => {
+                    const span = document.createElement('span');
+                    const cls = colorizeWord(word);
+                    if (cls) span.classList.add(cls);
+                    span.textContent = word;
+                    div.appendChild(span);
+                    if (idx < arr.length - 1) div.appendChild(document.createTextNode(' '));
+                });
+                principlesDiv.appendChild(div);
+            });
+
+            // 상황 + 괴리율
+            const situationText =
+                `${situationName} (${deviation >= 0 ? '+' : ''}${deviation.toFixed(2)}%)`;
+            document.getElementById('situation').textContent = situationText;
+
+            // 핵심 지표 라인
+            document.getElementById('stats').innerHTML =
+                `<span class="price">$${curr.toFixed(2)}</span> / ` +
+                `<span class="env">$${envelopeNow.toFixed(2)}</span> / ` +
+                `<span class="ma">$${ma200.toFixed(2)}</span>`;
+
+            // --- 차트 그리기 로직 시작 ---
+
+            // 차트에 표시할 기간의 데이터만 자르기
+            const startIndex = Math.max(0, len - CHART_DAYS);
+            const chartCloses = closes.slice(startIndex);
+            const chartTimestamps = timestamps.slice(startIndex);
+
+            // MA200과 Envelope 선은 전체 데이터에서 계산된 값을 차트 기간 내내 유지
+            const ma200Data = new Array(chartCloses.length).fill(ma200);
+            const envelopeData = new Array(chartCloses.length).fill(envelope);
+
+            // 날짜 레이블 포맷
+            const labels = chartTimestamps.map(ts => {
+                const date = new Date(ts * 1000);
+                return `${date.getMonth() + 1}/${date.getDate()}`; // 월/일 형식
+            });
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+
+            // 기존 차트 인스턴스가 있으면 파괴하고 새로 만듭니다.
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '종가',
+                            data: chartCloses,
+                            borderColor: '#58ccff', // 현재가 색상 (파랑)
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.2, // 곡선 부드럽게
+                        },
+                        {
+                            label: 'Envelope',
+                            data: envelopeData,
+                            borderColor: '#b96bc6', // Envelope 색상 (보라)
+                            borderWidth: 1.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0,
+                        },
+                        {
+                            label: 'MA 200',
+                            data: ma200Data,
+                            borderColor: '#AFD485', // 200일선 색상 (녹색)
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0,
+                        }
+                    ]
+                },
+                // Chart options 수정 (수동 min/max 제거)
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            display: false,
+                            grid: { display: false }
+                        },
+                        y: {
+                            display: false,
+                            grid: { display: false },
+                            // 이전에 있던 수동 범위 설정(min, max)을 제거합니다. 
+                            // Chart.js가 데이터에 맞춰 자동으로 범위를 조정하게 합니다.
+                            // min: ma200 * 0.85,  <-- 삭제
+                            // max: ma200 * 1.15   <-- 삭제
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    },
+                    layout: {
+                        padding: { top: 5, bottom: 5, left: 5, right: 5 }
+                    }
+                }
 
     loadData().catch(err => {
-      console.error(err);
-      // '오류 발생' 메시지 대신 '데이터 로딩 실패' 메시지를 출력합니다.
-      document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
-    });
-  </script>
+                    console.error(err);
+                    // '오류 발생' 메시지 대신 '데이터 로딩 실패' 메시지를 출력합니다.
+                    document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
+                });
+    </script>
 </body>
+
 </html>
