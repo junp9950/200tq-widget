@@ -88,10 +88,15 @@
 
         /* 200일선 */
 
-        /* 5. 차트 캔버스 스타일 (늘어짐 방지 및 높이 고정) */
+        /* 5. 차트 캔버스 스타일: 캔버스 자체에는 높이 설정 안 함 */
         #priceChart {
-            height: 200px;
-            /* 차트 높이를 200px로 고정 */
+            /* 이전에 있던 CSS height 설정 제거 */
+        }
+
+        /* 6. 차트 컨테이너 스타일: 이 DIV가 높이를 고정하여 늘어짐 방지 */
+        .chart-container {
+            height: 200px; /* 고정된 높이를 설정하여 Chart.js가 여기에 맞춰지게 함 */
+            width: 100%;
         }
     </style>
 </head>
@@ -106,7 +111,9 @@
 
     <div class="stat-line" id="stats"></div>
 
-    <canvas id="priceChart"></canvas>
+    <div class="chart-container">
+        <canvas id="priceChart"></canvas>
+    </div>
 
     <script>
         const ENVELOPE_PERCENTAGE = 5;
@@ -270,15 +277,21 @@
                         }
                     ]
                 },
-                // Chart options 내부
                 options: {
-                    // responsive를 false로 설정하여 차트가 캔버스 크기에만 의존하게 강제
-                    responsive: false,
-                    maintainAspectRatio: false,
+                    // responsive: true로 복구, 부모 div에 반응하게 함
+                    responsive: true, 
+                    maintainAspectRatio: false, // 비율 유지를 비활성화하여 div 높이를 따르게 함
                     scales: {
-                        // ... (scales 부분은 그대로 유지) ...
+                        x: {
+                            display: false,
+                            grid: { display: false }
+                        },
+                        y: {
+                            display: false,
+                            grid: { display: false },
+                            // min/max 제거로 Chart.js가 데이터에 맞춰 자동 스케일링
+                        }
                     },
-                    // ... (plugins, layout 부분은 그대로 유지) ...
                     plugins: {
                         legend: { display: false },
                         tooltip: { enabled: false }
@@ -288,9 +301,9 @@
                     }
                 }
             });
-        } // <--- loadData 함수를 닫는 괄호
+        } 
 
-        // --- 스크립트 실행 부분 (SyntaxError 해결) ---
+        // --- 스크립트 실행 부분 ---
         loadData().catch(err => {
             console.error(err);
             document.getElementById('meta-info').textContent = '데이터 처리 중 오류 발생';
