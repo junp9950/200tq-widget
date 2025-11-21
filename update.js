@@ -8,19 +8,24 @@ async function main() {
         const data = await res.json();
         const result = data.chart.result[0];
         
-        // [핵심 수정] 액면분할 대응: adjclose(수정주가)가 있으면 그걸 쓰고, 없으면 그냥 close를 씀
-        let closes = [];
-        if (result.indicators.adjclose && result.indicators.adjclose[0].adjclose) {
-            closes = result.indicators.adjclose[0].adjclose;
+        // 기본 종가 데이터 가져오기
+        let closes = result.indicators.quote[0].close;
+        
+        // [긴급 패치] 액면분할 강제 보정 로직
+        // 야후가 과거 데이터를 수정 안 했을 경우를 대비해 우리가 직접 계산
+        const currentRealtimePrice = result.meta.regularMarketPrice; // 현재가 (약 46불)
+        const lastHistoryPrice = closes[closes.length - 1]; // 과거 데이터 마지막 (약 90불일 수 있음)
+
+        // 만약 과거 데이터가 현재가보다 1.8배 이상 크다면? -> "아, 야후가 아직 반영 안 했구나" -> 2로 나누기
+        if (lastHistoryPrice > currentRealtimePrice * 1.8) {
+            console.log("Split Detected: Adjusting historical data manually...");
+            closes = closes.map(p => p ? p / 2 : 0);
         } else {
-            closes = result.indicators.quote[0].close;
+            // 정상적인 경우 null만 0으로 처리
+            closes = closes.map(p => p === null ? 0 : p);
         }
 
-        // null 값 필터링 (가끔 데이터 빵꾸날 때 대비)
-        closes = closes.map(p => p === null ? 0 : p);
-
-        // 현재가 업데이트 (장중 실시간 반영)
-        const currentRealtimePrice = result.meta.regularMarketPrice;
+        // 현재가 업데이트 (마지막 데이터를 실시간 가격으로 교체)
         closes[closes.length - 1] = currentRealtimePrice;
 
         // 2. MA200 계산
@@ -103,7 +108,7 @@ async function main() {
         };
         
         fs.writeFileSync('result.json', JSON.stringify(output));
-        console.log("Data Updated (Split Adjusted).");
+        console.log("Data Updated (Manual Split Correction Applied).");
 
     } catch (e) {
         console.error(e);
